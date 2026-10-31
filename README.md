@@ -6,6 +6,8 @@
 
 This repository is a fork of [TAM-DS/databricks-ai-ready-lakehouse](https://github.com/TAM-DS/databricks-ai-ready-lakehouse) by Tracy Anne Griffin Manning (MIT). Her original single notebook is kept as the first thing you run. The rest of the pipeline is split into a multi-task, incremental, testable structure, and most of the Databricks and PySpark work is left for you as TODOs.
 
+**Learning with an AI assistant?** Point it at [`docs/tutor/README.md`](docs/tutor/README.md). It has the teaching rules (guide, don't solve) and a step-by-step guide for each stage. Claude Code picks this up automatically via `CLAUDE.md`.
+
 ---
 
 ## Architecture
