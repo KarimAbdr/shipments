@@ -1,0 +1,29 @@
+# validate only — this project never deploys.
+# Check this file with `databricks bundle validate`. Do NOT run `databricks bundle deploy`.
+bundle:
+  name: shipments-lakehouse
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog that holds the shipments schema
+    default: workspace
+  schema:
+    description: Schema that holds the shipments tables and volume
+    default: shipments
+
+# Files that must not be uploaded to the workspace with the bundle.
+sync:
+  exclude:
+    - notebooks/01_bronze_silver_gold.ipynb
+    - docs/**
+    - data/**
+    - quality_portal/**
+    - .venv/**
+
+targets:
+  dev:
+    mode: development
+    default: true

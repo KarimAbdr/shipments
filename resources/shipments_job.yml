@@ -1,0 +1,35 @@
+resources:
+  jobs:
+    shipments_pipeline:
+      name: shipments-pipeline
+      # Job parameters are passed to every notebook task as widget values.
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+      # No compute block: the job runs on serverless compute.
+      tasks:
+        - task_key: generate
+          notebook_task:
+            notebook_path: ../notebooks/00_generate_batches.py
+            base_parameters:
+              days: "1"
+              run_id: "{{job.run_id}}"
+
+        - task_key: bronze
+          depends_on:
+            - task_key: generate
+          notebook_task:
+            notebook_path: ../notebooks/10_bronze.py
+            base_parameters:
+              run_id: "{{job.run_id}}"
+
+        # TODO-14: Complete the job (bundle)
+        # WHAT:   add silver, gold, quality_checks tasks with depends_on + run_id param; install Databricks CLI; `databricks bundle validate` (NO deploy)
+        # WHY:    A job is code: its tasks, their order (depends_on) and parameters belong in the bundle, reviewed like any other code.
+        # PRODUCT: The whole pipeline can be rebuilt from git, and validation catches broken YAML before anything is deployed.
+        # SCOPE:  ~20 lines YAML, ~30 min, difficulty 2/3
+        # HINTS:  Bundle resources: https://docs.databricks.com/aws/en/dev-tools/bundles/resources . Dynamic values such as {{job.run_id}}: https://docs.databricks.com/aws/en/jobs/dynamic-value-references . CLI install: https://docs.databricks.com/aws/en/dev-tools/cli/install . Bundles overview: https://docs.databricks.com/aws/en/dev-tools/bundles/
+        # DONE WHEN: `databricks bundle validate` prints "Validation OK!"
+        # SEE:    resources/shipments_job.yml bronze task, docs/TODO.md#todo-14
