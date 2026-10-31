@@ -1,163 +1,273 @@
-# AI-Ready Data Platform
-### Databricks Lakehouse • Governed Data Quality • Read-Only AI Interfaces
+# Shipments Lakehouse: a Databricks learning scaffold
 
-**From synthetic enterprise data to validated, traceable, AI-ready business evidence.**
+> Learning project — forked & extended. Work in progress: see checklist below.
 
-An end-to-end demonstration integrating **Python, Spark SQL, PySpark, Delta Lake, Databricks serverless Jobs, Unity Catalog lineage, Docker, Gradio, and Model Context Protocol (MCP)**. This project turns quality rules into observable data products, then makes the results available through a bounded offline interface.
+**Problem.** A supplier network ships parts (transformers, inverters, turbine components, cooling modules) across US regions, and every shipment generates status events. Those events arrive as daily batches, contain bad records (missing suppliers, impossible quantities, unknown statuses) and sometimes repeat or update earlier shipments. The question this project works on: how do you turn messy daily batches into analytics you can trust, with every rejected row kept and explained, every re-run safe, and every table change reversible? The data is fully synthetic.
 
-**Build it. Secure it. Test it. Prove it.**
+This repository is a fork of [TAM-DS/databricks-ai-ready-lakehouse](https://github.com/TAM-DS/databricks-ai-ready-lakehouse) by Tracy Anne Griffin Manning (MIT). Her original single notebook is kept as the first thing you run. The rest of the pipeline is split into a multi-task, incremental, testable structure, and most of the Databricks and PySpark work is left for you as TODOs.
 
-> **Published reference implementation.** The notebook and local interfaces are independently reproducible; see the measured evidence below and [`PUBLISH.md`](PUBLISH.md) for release workflow notes.
+---
 
-![System architecture](docs/architecture.svg)
+## Architecture
 
-## Demonstrated capabilities
+```mermaid
+flowchart LR
+    G["00 generate batches<br/>synthetic CSV batches<br/>day 1, day 2 updates, day 3 new column"] -->|writes| V[("UC volume<br/>/Volumes/workspace/shipments/raw")]
+    V --> B["10 bronze<br/>append raw + _source_file<br/>and _ingested_at"]
+    B --> BT[("bronze_shipments")]
+    BT --> S["20 silver<br/>quality rules to quarantine<br/>dedup and MERGE upsert"]
+    S --> ST[("silver_shipments")]
+    S --> QT[("quarantine_shipments")]
+    D["supplier dim<br/>SCD1 MERGE reference"] --> DT[("dim_supplier")]
+    ST --> GO["30 gold<br/>aggregates"]
+    DT --> GO
+    GO --> G1[("gold_region_part")]
+    GO --> G2[("gold_supplier_scorecard")]
+    ST --> DQ["40 quality checks<br/>checks to dq_results<br/>fail on critical"]
+    G1 --> DQ
+    B -.->|audit| RA[("pipeline_runs")]
+    S -.->|audit| RA
+    GO -.->|audit| RA
+    DQ -.->|audit| RA
+    OPS["50 delta ops<br/>history, time travel, RESTORE<br/>OPTIMIZE, clustering"] -.-> ST
+```
 
-| Skill | Implemented proof |
-|---|---|
-| **Python** | Modular quality-report loader with six passing offline tests |
-| **SQL** | Spark SQL validation, quarantine logic, and Gold aggregation |
-| **Apache Spark / PySpark** | DataFrame creation, write operations, and table assertions on Databricks serverless compute |
-| **Delta Lake** | Four persisted demo Delta tables |
-| **Databricks** | One **successful managed serverless Job** (manual run, 1m 12s) |
-| **Governance** | Quality rules, quarantine records, and observed Unity Catalog table-level lineage |
-| **Docker** | Image built; local Gradio dashboard launched and populated within the container |
-| **Gradio** | Read-only dashboard rendering exported Gold and rejection summaries |
-| **MCP** | Stdio server with three discovered and successfully invoked read-only tools |
+Everything lives in Unity Catalog under `workspace.shipments` (catalog, schema and volume names are overridable through notebook widgets and job parameters). The scaffold ships the reference path and the job's first two tasks (`generate` → `bronze`). The silver, gold and quality tasks are added by you in TODO-14.
 
-> **Scope:** This is a working **synthetic-data reference implementation**, not a production deployment or an enterprise security certification. Unity Catalog lineage was observed; fine-grained access enforcement was **not** tested. The local interface uses CSV exports rather than a live Databricks connection.
+---
 
-## The verified outcome — October 29, 2026
+## Tech stack
 
-| Quality check | Observed |
-|---|---:|
-| Synthetic raw shipment records | **1,260** |
-| Accepted into Silver | **1,200** |
-| Quarantined with reasons | **60** |
-| Unique accepted shipment IDs | **1,200** |
-| Gold region × part segments | **16** |
-| Declared quality-rule pass rate | **95.24%** |
-| Delayed shipments in Gold | **400** |
-| Modeled inventory value | **$113,357,434.78** |
-| Automated local tests | **6 passed** |
-| Managed Databricks job | **Succeeded**, 1m 12s |
-| MCP smoke test | **3 tool calls succeeded** |
+- **PySpark** (DataFrame API only) and **Spark SQL**, including `MERGE`, window functions and `try_cast`
+- **Delta Lake** tables, with time travel, `RESTORE`, `OPTIMIZE` and liquid clustering as learning topics
+- **Unity Catalog** for three-level table names and a **volume** for the raw CSV batches
+- **Databricks serverless notebooks and Jobs** (Spark Connect; no clusters, no DBFS paths)
+- **Databricks Asset Bundles**, used for `databricks bundle validate` only
+- **pytest** for unit tests, with a local `local[1]` Spark session or the active Databricks session
+- **GitHub Actions**, running tests only (no deploy steps): the original offline tests today, with pytest added in TODO-15
 
-Quarantine reason counts were: **15 duplicate shipment, 12 missing supplier, 10 invalid quantity, 9 invalid status, 8 invalid unit cost, 6 invalid date**. These are deliberately injected synthetic errors, not measured enterprise data-quality rates. Gold *modeled inventory value* is quantity × synthetic unit cost, **not** booked revenue or financial reporting.
+---
 
-### Additional release screenshots — October 29, 2026
+## Run on Databricks Free Edition
 
-These screenshots show the observed results of a synthetic-data reference implementation, not a production deployment.
+> Not yet verified by the scaffold author on Free Edition. The steps below follow the design; if a step behaves differently for you, please tick the checklist only after you have confirmed it yourself.
 
-#### Successful managed job timeline
-![Databricks managed job execution](docs/evidence/06-managed-job-timeline.png)
+1. **Sign up** for Databricks Free Edition (search for "Databricks Free Edition"). Its limits are described in the [Free Edition limitations](https://docs.databricks.com/aws/en/getting-started/free-edition-limitations) docs.
+2. **Fork this repository** on GitHub. Your fork URL is `<your-fork-url>` below.
+3. In the workspace, go to **Workspace → Create → Git folder** and paste `<your-fork-url>`. See the [Git folders](https://docs.databricks.com/aws/en/repos/) docs.
+4. (Optional) Open the original notebook `notebooks/01_bronze_silver_gold` and run it. It is the v0 reference and prints `VALIDATED` when its own assertions pass.
+5. Open the notebooks in this order, and **attach Serverless** compute to each one:
 
-#### Unity Catalog table-level lineage
-![Unity Catalog lineage](docs/evidence/07-unity-catalog-lineage.png)
+   | Order | Notebook | Setting | What it does |
+   |---|---|---|---|
+   | 1 | `00_generate_batches` | `days = 1` | Writes the day-1 CSV into the volume |
+   | 2 | `10_bronze` | | Appends the CSV rows to `bronze_shipments` |
+   | 3 | `20_silver` | `supplier_version = 1` | Dim load, quality rules, quarantine, silver |
+   | 4 | `30_gold` | | Builds `gold_region_part` |
+   | 5 | `40_quality_checks` | | Writes `dq_results` and fails on critical checks |
+   | 6 | `50_delta_ops` | | History, time travel, and (after TODO-11/12) restore and clustering |
+   | 7 | `60_monitoring` | | Last rows of `pipeline_runs`, plus the TODO-13 and TODO-18 cells |
 
-#### Docker and Gradio milestone
-![Docker and Gradio validation](docs/evidence/08-docker-gradio-validation.png)
+6. **Expected day-1 reference numbers.** Before you have done any TODO, the reference path should give:
 
-#### Gradio data quality metrics
-![Gradio quality metrics](docs/evidence/09-gradio-validation.png)
+   | Table | Rows |
+   |---|---:|
+   | bronze_shipments | 1,260 |
+   | silver_shipments | 1,248 |
+   | quarantine_shipments | 12 |
+   | gold_region_part | 16 |
 
-#### Read-only data quality control tower
-![Gradio control tower](docs/evidence/10-quality-control-tower.png)
+   The 12 quarantined rows are only the `missing_supplier` cases. The other bad rows pass until their rules (TODO-02) and the dedup (TODO-04) are done.
 
-> The dashboard reads downloaded CSV snapshots, not a live Databricks connection. Exported files do not inherit Unity Catalog permissions.
+7. **Numbers after all core TODOs** (from `docs/SCAFFOLD_SPEC.md` §1, expected state once the core TODOs are complete):
 
-## Actual engineering evidence
+   | After loading | bronze rows | quarantine rows | silver rows (distinct shipments) | gold_region_part rows |
+   |---|---:|---:|---:|---:|
+   | day 1 | 1,260 | 45 | 1,200 | 16 |
+   | days 1–2 | 1,565 | 50 | 1,300 | 16 |
+   | days 1–3 | 1,665 | 50 | 1,350 | 16 |
 
-### 1 · Delta lineage: Bronze → Silver → Gold
+   The day-1 quarantine count is 45 rather than 12 because the rules from TODO-02 are then active.
 
-![Actual Unity Catalog table-level lineage](docs/evidence/01-lineage.png)
+8. **Load day 2.** Run `00_generate_batches` with `days = 2`, then `10_bronze` and `20_silver`. In `20_silver`, set `USE_MERGE = True` once TODO-08 is done, so that the day-2 status updates are merged rather than fully rebuilt. Until TODO-07 is done, re-running `10_bronze` re-appends every file in the volume, so bronze duplicates your data.
 
-*Databricks Catalog Explorer showed the full upstream chain. Cropped and account identifiers redacted for public sharing; source table relationships are unchanged.*
+9. **Load day 3.** Run `00_generate_batches` with `days = 3`, then `10_bronze` and `20_silver`. Day 3 adds a `carrier` column. Without TODO-10, appending it to bronze fails with a schema mismatch. That failure is intended, and TODO-10 is about handling it.
 
-### 2 · Managed Databricks execution
+10. **Editing code in `src/`.** The notebooks enable `%autoreload 2`, so edits to `src/shipments_pipeline/*.py` are picked up automatically (expected, not yet verified on Free Edition). If a change does not show up, use **Detach & re-attach** or restart the Python process.
 
-![Completed serverless Databricks Job](docs/evidence/02-managed-job.png)
+---
 
-*Single manual workflow run finished **Succeeded** on serverless compute after **1m 12s**. A recurring schedule was **not** configured.*
+## Run tests locally
 
-### 3 · Human-facing quality control tower
-
-![Gradio dashboard with downloaded Gold and quarantine summaries](docs/evidence/03-gradio.png)
-
-*Working read-only Gradio dashboard fed by two manually downloaded CSV reports, not a live governed Databricks connection.*
-
-### 4 · Reproducible local container
-
-![Docker Compose build and application startup](docs/evidence/04-docker.png)
-
-*Docker Compose built the image and started the local Gradio server. The owner also observed a populated dashboard after container launch.*
-
-### 5 · Bounded MCP protocol
-
-![MCP client successfully calls three tools](docs/evidence/05-mcp.png)
-
-*Three tools discovered and called using a real MCP client session: quality summary, quarantine reasons, and two sample Gold segments.*
-
-See [the validation matrix](docs/VALIDATION.md), [architecture](docs/ARCHITECTURE.md), and [security boundaries](docs/SECURITY.md) for source/claim distinctions and limitations.
-
-## Reproduce the Databricks pipeline
-
-1. Import [`notebooks/01_bronze_silver_gold.ipynb`](notebooks/01_bronze_silver_gold.ipynb) into Databricks Free Edition (or another compatible Unity Catalog workspace).
-2. Select a Unity Catalog catalog where you may create a demo schema and attach **Serverless** compute.
-3. Run the notebook. It creates/replaces **only** `ai_ready_demo.sc_bronze`, `sc_silver`, `sc_quarantine`, and `sc_gold` in the selected catalog, and verifies synthetic data assertions. **The four demo tables are overwritten on subsequent runs.**
-4. In Catalog Explorer, inspect table persistence and **Lineage**; lineage availability and authorization must be independently confirmed.
-5. Create a **Databricks Job** with notebook task type, select the notebook, use Serverless, and execute one manual run. Verify **Succeeded** and inspect the notebook's final `VALIDATED` output. Do not assume a successful Job run demonstrates a production SLA.
-
-A Databricks source-export alternative is [`notebooks/01_bronze_silver_gold.py`](notebooks/01_bronze_silver_gold.py). The notebook performs **no OpenAI calls** and creates only generated synthetic shipment data.
-
-## Export two report tables for the local viewer
-
-Download the final **Gold data product** display (16 rows) to `data/gold.csv`, and **Quarantine reasons** display (6 rows) to `data/quarantine_reasons.csv`. Preserve the CSV headers. The repository intentionally excludes these local downloads and any secrets.
-
-The local viewer **fails closed** when exports are missing, malformed, oversized, or inconsistent. The computed totals are based on the CSV data you provide—not hardcoded demonstration data.
-
-## Run local Gradio
+You need Python 3.12 and Java 17 (PySpark runs on the JVM).
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e .
-python -m unittest discover -s tests -v
-python -m quality_portal.dashboard
+pip install -r requirements-dev.txt
+pytest -q
 ```
 
-Open <http://127.0.0.1:7860> on the same machine. This does not connect to Databricks.
+The generator tests are pure Python. The quality and silver tests start a local Spark session (`local[1]`). The tests for TODO-03 and TODO-05 are skipped until you replace the skips with real tests, so a green run before you start means "nothing wrong with what exists", not "the TODOs are done".
 
-## Run local Docker
+To run the same tests on Databricks, attach a notebook to Serverless and run `notebooks/99_run_tests`. That path is not yet verified by the scaffold author on Free Edition.
 
-With Docker Desktop running, stop the non-container Gradio server first to free port `7860`:
+---
+
+## Bundle (validate only)
+
+The file `databricks.yml` and `resources/shipments_job.yml` describe the job as code. You can check them with:
 
 ```bash
-docker compose up --build
+databricks bundle validate
 ```
 
-Open <http://127.0.0.1:7860>. The host binding is loopback-only; the container runs without root, with a read-only data mount and read-only filesystem. Docker packages **the local dashboard**, not cloud Spark compute.
+Install the Databricks CLI first ([CLI install docs](https://docs.databricks.com/aws/en/dev-tools/cli/install)). The [bundles docs](https://docs.databricks.com/aws/en/dev-tools/bundles/) explain the format. `validate` may need CLI authentication to a workspace; that is not yet verified by the scaffold author.
 
-## Test the read-only MCP server
+**This project never deploys.** There is no `bundle deploy`, no `bundle run`, no CI deploy step, and no recurring schedule. CI runs tests only: today that is the original offline tests in `tests/test_core.py`; the pytest and PySpark tests join CI in TODO-15.
 
-Activate the project's virtual environment after installing dependencies and exporting the two CSVs:
+---
 
-```bash
-python scripts/mcp_smoke_test.py
+## Project structure
+
+```
+databricks-project/
+├── README.md                       this file (learning entry point)
+├── PLAN.md                         why the scaffold is shaped this way
+├── LICENSE                         MIT, Tracy Anne Griffin Manning
+├── databricks.yml                  bundle "shipments-lakehouse", validate only
+├── resources/
+│   └── shipments_job.yml           job shipments_pipeline (generate → bronze, more in TODO-14)
+├── notebooks/
+│   ├── 01_bronze_silver_gold.py    ORIGINAL v0 notebook (untouched)
+│   ├── 01_bronze_silver_gold.ipynb ORIGINAL, notebook import format (untouched)
+│   ├── 00_generate_batches.py      synthetic CSV batches into the UC volume
+│   ├── 10_bronze.py                incremental CSV → bronze (TODO-07)
+│   ├── 20_silver.py                dim load, quality, quarantine, silver (MERGE from TODO-08)
+│   ├── 30_gold.py                  gold aggregates (TODO-06, TODO-17)
+│   ├── 40_quality_checks.py        DQ checks → dq_results (TODO-09)
+│   ├── 50_delta_ops.py             history, time travel, OPTIMIZE (TODO-11, TODO-12)
+│   ├── 60_monitoring.py            pipeline_runs, query plan, billing (TODO-13, TODO-18)
+│   └── 99_run_tests.py             pytest on Databricks
+├── src/shipments_pipeline/         pure functions DataFrame → DataFrame (unit-testable)
+│   ├── __init__.py
+│   ├── config.py                   names, widgets and parameters
+│   ├── generator.py                deterministic synthetic batches (no Spark)
+│   ├── bronze.py                   read_batch (ref), list_new_files (TODO-07)
+│   ├── quality.py                  rule framework, quarantine split (ref), rules (TODO-02)
+│   ├── silver.py                   dedup_latest (TODO-04), merge_into_silver (TODO-08)
+│   ├── dims.py                     dim_supplier SCD1 MERGE (ref), SCD2 (TODO-16)
+│   ├── gold.py                     build_region_part (ref), build_supplier_scorecard (TODO-06)
+│   ├── checks.py                   DQ checks (ref), more checks and fail-fast (TODO-09)
+│   └── audit.py                    log_run into pipeline_runs (ref)
+├── tests/
+│   ├── conftest.py                 spark fixture (active session or local[1])
+│   ├── test_generator.py           pure Python, asserts the expected numbers
+│   ├── test_quality.py             reference test + TODO-03 tests
+│   ├── test_silver.py              TODO-05 test
+│   └── test_core.py                ORIGINAL unittest tests for the quality portal
+├── quality_portal/                 ORIGINAL local Gradio dashboard and MCP server
+├── scripts/                        ORIGINAL helper scripts
+├── data/                           ORIGINAL: place for local CSV exports (not committed)
+├── docs/
+│   ├── TODO.md                     the 18 TODOs, one section each
+│   ├── CONCEPTS.md                 Spark and Delta concepts, with pointers into the repo
+│   ├── ORIGINAL_README.md          the original README, unchanged apart from a one-line attribution header
+│   ├── SCAFFOLD_SPEC.md            the exact build spec the scaffold was written from
+│   ├── ARCHITECTURE.md, VALIDATION.md, SECURITY.md   ORIGINAL
+│   └── NOTES.md                    your notes for TODO-13, TODO-17, TODO-18 (you create it)
+├── requirements-dev.txt            pyspark, pytest
+├── pyproject.toml                  pytest settings
+├── .github/workflows/tests.yml     CI: original offline tests now; pytest step added in TODO-15
+├── Dockerfile, compose.yaml        ORIGINAL local dashboard packaging
+└── PUBLISH.md                      ORIGINAL release notes
 ```
 
-The MCP server exposes exactly three fixed stdio tools: `get_quality_summary`, `list_quarantine_reasons`, and `list_gold_segments`. The client validation reads exported summaries only—no SQL execution, shell commands, Databricks API, direct model inference, write operations, or release authority.
+---
 
-## Security and limitations
+## What is verified and what is not
 
-- **Synthetic data only**; no live corporate records, billing or revenue figures, real supplier information, or production accuracy claims.
-- **Snapshot separation**: Unity Catalog permissions and lineage do not transfer automatically to local CSV files; do not use this as evidence of end-to-end data authorization.
-- **No tested row-level or column-level access policy**; Unity Catalog lineage alone cannot establish effective permissions.
-- **No scheduled/continuous production pipeline**; the observed Job was launched manually once.
-- **MCP integration is local stdio** and has no live cloud access or autonomous action capabilities.
-- **No production fleet, load, identity, retention, redaction, or adversarial validation** is claimed.
-- The Python package uses major-version bounds rather than a fully locked dependency graph; reproducibility of library versions is not guaranteed across future installs.
+The table follows `docs/SCAFFOLD_SPEC.md` §4. "Verified" below means: a test in the repo covers it, or the original author reported it. It does not mean that the current code passes. Run `pytest -q` and the notebooks to see the state on your machine.
 
-**Engineering principle:** A result should become trusted only after its quality, lineage, intended use, and authority have been established. Evidence before action.
+| Area | What it covers | Status |
+|---|---|---|
+| Generator numbers | 1,260 / 305 / 100 rows, 45 bad rows on day 1, supplier versions 24 and 25 | Pure-Python test in `tests/test_generator.py`. Run `pytest -q` to confirm. |
+| Pure-Python logic | Generator, CSV header, `supplier_rows` | Same test file, no Spark needed |
+| PySpark unit tests | Quality rules, `cast_types`, `dedup_latest` (TODO-05) | Local Spark `local[1]` with Java 17. Run `pytest -q` to confirm. |
+| YAML files | `databricks.yml`, `resources/shipments_job.yml`, `.github/workflows/tests.yml` | Expected to parse. Check with a YAML parser yourself. |
+| Databricks notebooks | Serverless runs of `00`–`60` | **Not yet verified by the scaffold author on Free Edition** |
+| Unity Catalog, volumes, `_metadata` column | Table names, `/Volumes` paths, `_metadata.file_path` format | **Not yet verified by the scaffold author on Free Edition** |
+| MERGE on serverless | `merge_into_silver`, `upsert_dim_supplier` | **Not yet verified by the scaffold author on Free Edition** |
+| Liquid clustering, OPTIMIZE, RESTORE | TODO-11, TODO-12 | **Not yet verified by the scaffold author on Free Edition** |
+| Autoreload | Edits in `src/` reflected in notebooks | **Not yet verified by the scaffold author on Free Edition** |
+| `databricks bundle validate` | Job and bundle config | **Not yet verified by the scaffold author** (may need CLI auth) |
+| `99_run_tests` | pytest inside Databricks | **Not yet verified by the scaffold author on Free Edition** |
+| System tables | `system.billing.usage` (TODO-18) | **Not yet verified**; may be unavailable on Free Edition. Recording the error is a valid outcome. |
+| Original author's results | 1,260 rows, 1,200 accepted, 60 quarantined, 6 local tests, one managed job run (2026-10-29) | Original author's observations, not re-run for this fork. See `docs/VALIDATION.md`. |
 
-*Fast. Technically credible. Outcome-oriented.*
+The original author's results come from the original notebook and her local tools. They describe a different run, with a different schema (`ai_ready_demo`), and they are not the expected numbers for this scaffold.
+
+---
+
+## Credits and contributions
+
+### (a) Original work: Tracy Anne Griffin Manning (TAM-DS)
+
+Tracy built the original project, which this fork extends. What she built:
+
+- `notebooks/01_bronze_silver_gold.py` and `.ipynb`: one synthetic-data notebook with Spark SQL quality rules, a quarantine table, a Gold aggregate, and assertions
+- `quality_portal/`: a read-only CSV loader, a Gradio dashboard, and an MCP stdio server over exported CSVs
+- `tests/test_core.py`: six `unittest` tests for the CSV loader
+- Docker and Compose packaging, and the `.github/workflows/tests.yml` CI
+- `docs/`: architecture, security notes, validation evidence and screenshots
+
+The original README, with her validation claims, is preserved in [`docs/ORIGINAL_README.md`](docs/ORIGINAL_README.md). Those claims are hers. This fork has not re-run them. Upstream: [TAM-DS/databricks-ai-ready-lakehouse](https://github.com/TAM-DS/databricks-ai-ready-lakehouse). Her work is licensed under MIT (see `LICENSE`).
+
+### (b) AI-assisted scaffolding
+
+The scaffold was built with **Claude Code** (Anthropic), using a written spec (`docs/SCAFFOLD_SPEC.md`) and a plan (`PLAN.md`). The reference implementations, one worked example per pattern, are:
+
+- `config.py` and the notebook widgets
+- `generator.py` and `00_generate_batches`
+- `bronze.read_batch()`: CSV → raw-string DataFrame + `_source_file`/`_ingested_at`
+- `quality.py` framework, the `missing_supplier` rule, and `split_valid_quarantine()`
+- `dims.upsert_dim_supplier()`: an SCD1 MERGE
+- `gold.build_region_part()`
+- `checks.check_no_shipment_lost()` and `results_to_df()`
+- `audit.log_run()`
+- `50_delta_ops` reference cells: `DESCRIBE HISTORY` and `VERSION AS OF`
+- `tests/conftest.py` and `test_missing_supplier_rule`
+- `databricks.yml` and the job's `generate` → `bronze` tasks
+
+These reference parts are not yet verified on Free Edition (see the table above).
+
+### (c) My implementations
+
+Tick each item when you have implemented it and its DONE WHEN check passes. Each title links to its section in [`docs/TODO.md`](docs/TODO.md).
+
+- [ ] TODO-01 Run & explore — [details](docs/TODO.md#todo-01)
+- [ ] TODO-02 Remaining quality rules — [details](docs/TODO.md#todo-02)
+- [ ] TODO-03 Tests for rules — [details](docs/TODO.md#todo-03)
+- [ ] TODO-04 Dedup latest event — [details](docs/TODO.md#todo-04)
+- [ ] TODO-05 Test dedup — [details](docs/TODO.md#todo-05)
+- [ ] TODO-06 Supplier scorecard (SQL) — [details](docs/TODO.md#todo-06)
+- [ ] TODO-07 Incremental bronze — [details](docs/TODO.md#todo-07)
+- [ ] TODO-08 Silver MERGE — [details](docs/TODO.md#todo-08)
+- [ ] TODO-09 More DQ checks — [details](docs/TODO.md#todo-09)
+- [ ] TODO-10 Schema evolution — [details](docs/TODO.md#todo-10)
+- [ ] TODO-11 Time travel + RESTORE — [details](docs/TODO.md#todo-11)
+- [ ] TODO-12 OPTIMIZE + liquid clustering — [details](docs/TODO.md#todo-12)
+- [ ] TODO-13 Audit everywhere + query plan — [details](docs/TODO.md#todo-13)
+- [ ] TODO-14 Complete the job (bundle) — [details](docs/TODO.md#todo-14)
+- [ ] TODO-15 CI tests job — [details](docs/TODO.md#todo-15)
+- [ ] TODO-16 Stretch: SCD2 dim — [details](docs/TODO.md#todo-16)
+- [ ] TODO-17 Stretch: broadcast join — [details](docs/TODO.md#todo-17)
+- [ ] TODO-18 Stretch: cost awareness — [details](docs/TODO.md#todo-18)
+
+Concepts behind the TODOs are explained in [`docs/CONCEPTS.md`](docs/CONCEPTS.md).
+
+---
+
+## License
+
+MIT License. The original copyright (Copyright (c) 2026 Tracy Anne Griffin Manning) is retained, and the full text is in [`LICENSE`](LICENSE). This fork keeps the same MIT license.
