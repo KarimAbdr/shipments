@@ -108,7 +108,7 @@ Each write adds files. Many small files mean many file opens and many tasks for 
 
 `OPTIMIZE ... ZORDER BY (cols)` co-locates rows with similar values of the listed columns in the same files, so filters on those columns can skip more files. Liquid clustering is set with `CLUSTER BY (cols)`; the table then keeps its data clustered as new data arrives, and `OPTIMIZE` works incrementally. You cannot use both on the same table. Liquid clustering is the newer option, and the Databricks docs recommend it for new tables.
 
-**Where in this repo:** TODO-12 `ALTER TABLE silver CLUSTER BY (region, event_date)`. Liquid clustering on Free Edition is not yet verified by the scaffold author.
+**Where in this repo:** TODO-12 `ALTER TABLE workspace.shipments.silver_shipments CLUSTER BY (region, event_date)`. Liquid clustering on Free Edition is not yet verified by the scaffold author.
 
 ## VACUUM
 

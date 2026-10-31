@@ -69,7 +69,7 @@ print("TODO-11 not done yet - skipped")
 # COMMAND ----------
 
 # TODO-12: OPTIMIZE + liquid clustering
-# WHAT:   `ALTER TABLE silver CLUSTER BY (region, event_date)`, `OPTIMIZE`, compare `DESCRIBE DETAIL` numFiles/clusteringColumns
+# WHAT:   `ALTER TABLE workspace.shipments.silver_shipments CLUSTER BY (region, event_date)`, `OPTIMIZE`, compare `DESCRIBE DETAIL` numFiles/clusteringColumns
 # WHY:    Many small files slow reads. OPTIMIZE compacts them, and clustering groups rows that are often filtered together.
 # PRODUCT: Faster queries on region and date filters, with less compute per query.
 # SCOPE:  ~6 lines SQL, ~25 min, difficulty 2/3

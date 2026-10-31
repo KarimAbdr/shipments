@@ -134,7 +134,7 @@ Raise `ValueError` for unknown day/version.
 ### `src/shipments_pipeline/gold.py`
 - [REFERENCE] `build_region_part(silver: DataFrame) -> DataFrame`: group by region, part_type: `shipment_count`, `units_total`,
   `modeled_inventory_value_usd` (round(sum(qty*cost),2)), `delayed_shipments`, `delayed_pct` (round 2), `first_event_date`, `last_event_date`.
-- [TODO-06] `build_supplier_scorecard(spark, silver_table: str, dim_table: str) -> DataFrame`: Spark SQL with a CTE; join current dim rows;
+- [TODO-06] `build_supplier_scorecard(spark, silver_table: str, dim_table: str) -> DataFrame`: Spark SQL with a CTE; join dim_supplier (SCD1, one row per supplier);
   columns `supplier_id, supplier_name, country, rating, shipment_count, delayed_pct, avg_unit_cost_usd, delay_rank` (`RANK() OVER (ORDER BY delayed_pct DESC)`).
 
 ### `src/shipments_pipeline/checks.py`
@@ -207,18 +207,18 @@ run_id = config.get_widget(dbutils, "run_id", "manual")
 
 | # | Title | Where | WHAT | DONE WHEN | SEE | Scope |
 |---|---|---|---|---|---|---|
-| 01 | Run & explore | docs only (+ notebooks) | Run original notebook, then 00 (days=1) → 10 → 20 → 30 → 40 → 50; in a cell run `spark.table(cfg.table("gold_region_part")).explain()` and `DESCRIBE HISTORY` on silver | original prints `VALIDATED`; bronze 1,260, silver 1,248, quarantine 12, gold 16 rows | notebooks/01_bronze_silver_gold.py | ~0 lines, 30m, 1 |
+| 01 | Run & explore | docs only (+ notebooks) | Run original notebook, then 00 (days=1) → 10 → 20 → 30 → 40 → 50 → 60; in a cell run `spark.table(cfg.table("gold_region_part")).explain()` and `DESCRIBE HISTORY` on silver | original prints `VALIDATED`; bronze 1,260, silver 1,248, quarantine 12, gold 16 rows | notebooks/01_bronze_silver_gold.py | ~0 lines, 30m, 1 |
 | 02 | Remaining quality rules | quality.py | implement 4 rule functions | after rerun of 20_silver (day 1): quarantine 45 rows, 5 distinct reason values; after TODO-03, the 4 rule tests pass (not skipped) | quality.py:rule_missing_supplier | ~12 lines, 25m, 1 |
 | 03 | Tests for rules | tests/test_quality.py | replace 4 skips with real tests | `pytest -q` shows the 4 tests passed, not skipped | tests/test_quality.py:test_missing_supplier_rule | ~30 lines, 25m, 1 |
-| 04 | Dedup latest event | silver.py | `dedup_latest` with Window + row_number | silver 1,200 rows, `count(distinct shipment_id) = count(*)`; SHP000001 status DELIVERED | quality.py:split_valid_quarantine (DataFrame style) | ~8 lines, 25m, 2 |
+| 04 | Dedup latest event | silver.py | `dedup_latest` with Window + row_number | (with TODO-02 done) silver 1,200 rows, `count(distinct shipment_id) = count(*)`; SHP000002 status DELIVERED (its older day-1 event was DELAYED) | quality.py:split_valid_quarantine (DataFrame style) | ~8 lines, 25m, 2 |
 | 05 | Test dedup | tests/test_silver.py | test with 3 events / 2 shipments | test passes | tests/test_quality.py:test_missing_supplier_rule | ~20 lines, 15m, 1 |
 | 06 | Supplier scorecard (SQL) | gold.py | `build_supplier_scorecard` | gold_supplier_scorecard has 24 rows, delay_rank 1 = highest delayed_pct | gold.py:build_region_part, dims.py (SQL style) | ~25 lines, 30m, 2 |
 | 07 | Incremental bronze | bronze.py + 10_bronze | `list_new_files` | running 10_bronze twice keeps bronze at 1,260 (day 1) | bronze.py:read_batch | ~5 lines + notebook, 30m, 2 |
-| 08 | Silver MERGE | silver.py + 20_silver (`USE_MERGE=True`) | `merge_into_silver` | 00 days=2 → 10 → 20: silver 1,300, quarantine 50; SHP000150 status DELIVERED; rerun 20 → no change | dims.py:upsert_dim_supplier | ~20 lines, 40m, 2 |
+| 08 | Silver MERGE | silver.py + 20_silver (`USE_MERGE=True`) | `merge_into_silver` | (with TODO-02 and TODO-04 done) 00 days=2 → 10 → 20: silver 1,300, quarantine 50; SHP000150 status DELIVERED; rerun 20 → no change | dims.py:upsert_dim_supplier | ~20 lines, 40m, 2 |
 | 09 | More DQ checks | checks.py + 40 | 3 functions | dq_results has 3+ rows per run; temporarily break a check → notebook fails with RuntimeError | checks.py:check_no_shipment_lost | ~25 lines, 30m, 2 |
 | 10 | Schema evolution | 10_bronze + silver.py | handle day 3 `carrier` column: bronze append and quarantine append with `mergeSchema`; silver MERGE with `UPDATE SET *`/`INSERT *` and `MERGE WITH SCHEMA EVOLUTION INTO` | 00 days=3 → 10 → 20: bronze 1,665, silver 1,350, `carrier` column exists, NULL for older rows | docs/CONCEPTS.md#schema-enforcement-vs-evolution | ~7 lines, 30m, 2 |
 | 11 | Time travel + RESTORE | 50_delta_ops | diff two versions (EXCEPT), `DELETE` Midwest rows, `RESTORE TABLE ... TO VERSION AS OF n` | silver count back to pre-delete value; history shows DELETE and RESTORE ops | 50_delta_ops reference cell | ~10 lines SQL, 20m, 2 |
-| 12 | OPTIMIZE + liquid clustering | 50_delta_ops | `ALTER TABLE silver CLUSTER BY (region, event_date)`, `OPTIMIZE`, compare `DESCRIBE DETAIL` numFiles/clusteringColumns | `clusteringColumns` shows both columns; write down numFiles before/after | 50_delta_ops | ~6 lines SQL, 25m, 2 |
+| 12 | OPTIMIZE + liquid clustering | 50_delta_ops | `ALTER TABLE workspace.shipments.silver_shipments CLUSTER BY (region, event_date)`, `OPTIMIZE`, compare `DESCRIBE DETAIL` numFiles/clusteringColumns | `clusteringColumns` shows both columns; write down numFiles before/after | 50_delta_ops | ~6 lines SQL, 25m, 2 |
 | 13 | Audit everywhere + query plan | 20/30/40 + 60 | call `log_run` in silver/gold/dq tasks; `explain("formatted")` gold query, find Exchange (shuffle) and explain why | pipeline_runs has a row per task per run; note in docs/NOTES.md where the shuffle is | audit.py:log_run, 10_bronze | ~10 lines, 30m, 2 |
 | 14 | Complete the job (bundle) | resources/shipments_job.yml | add silver, gold, quality_checks tasks with depends_on + run_id param; install Databricks CLI; `databricks bundle validate` (NO deploy) | `databricks bundle validate` prints "Validation OK!" | resources/shipments_job.yml bronze task | ~20 lines YAML, 30m, 2 |
 | 15 | CI tests job | .github/workflows/tests.yml | add a job: setup-java 17, python 3.12, `pip install -r requirements-dev.txt`, `pytest -q`; NO deploy steps | `act`-free check: YAML valid + same commands pass locally | existing tests.yml | ~15 lines YAML, 20m, 1 |

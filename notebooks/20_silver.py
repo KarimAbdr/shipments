@@ -67,7 +67,7 @@ print("TODO-16 not done yet - skipped")
 # PRODUCT: Silver always shows the latest status per shipment without rebuilding the whole table each day.
 # SCOPE:  ~20 lines, ~40 min, difficulty 2/3
 # HINTS:  Read silver.merge_into_silver and dims.upsert_dim_supplier. Flip the flag only when merge_into_silver works. Docs: https://docs.databricks.com/aws/en/delta/merge
-# DONE WHEN: 00 days=2 → 10 → 20: silver 1,300, quarantine 50; SHP000150 status DELIVERED; rerun 20 → no change
+# DONE WHEN: (with TODO-02 and TODO-04 done) 00 days=2 → 10 → 20: silver 1,300, quarantine 50; SHP000150 status DELIVERED; rerun 20 → no change
 # SEE:    dims.py:upsert_dim_supplier, docs/TODO.md#todo-08
 USE_MERGE = False  # flip to True when TODO-08 is done
 

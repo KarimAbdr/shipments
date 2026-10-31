@@ -51,7 +51,7 @@ Core TODOs are 01–15. Stretch TODOs are 16–18.
 
 **Concept taught:** Workspace, serverless compute, Unity Catalog names, and lazy evaluation (what `explain()` shows you).
 
-**WHAT:** Run original notebook, then 00 (days=1) → 10 → 20 → 30 → 40 → 50; in a cell run `spark.table(cfg.table("gold_region_part")).explain()` and `DESCRIBE HISTORY` on silver
+**WHAT:** Run original notebook, then 00 (days=1) → 10 → 20 → 30 → 40 → 50 → 60; in a cell run `spark.table(cfg.table("gold_region_part")).explain()` and `DESCRIBE HISTORY` on silver
 
 **WHY:** Before you change anything, you need to see what the pipeline produces and how Spark plans the work. This TODO is the baseline every later TODO is measured against.
 
@@ -168,7 +168,7 @@ Core TODOs are 01–15. Stretch TODOs are 16–18.
 - A `Window.orderBy` with no `partitionBy` puts all rows into one partition. It is correct but slow, and Spark warns about it.
 - Filtering on `row_number` requires a second step: a window function cannot be used directly in a `filter`.
 
-**DONE WHEN:** silver 1,200 rows, `count(distinct shipment_id) = count(*)`; SHP000001 status DELIVERED
+**DONE WHEN:** (with TODO-02 done) silver 1,200 rows, `count(distinct shipment_id) = count(*)`; SHP000002 status DELIVERED (its older day-1 event was DELAYED)
 
 **SEE:** quality.py:split_valid_quarantine (DataFrame style)
 
@@ -220,7 +220,7 @@ Core TODOs are 01–15. Stretch TODOs are 16–18.
 
 **HINTS:**
 - Look at `build_region_part` in `gold.py` for the aggregate pattern and at `dims.py` for SQL style.
-- Use a CTE to compute per-supplier aggregates from the silver table, then join the current rows of the dim table.
+- Use a CTE to compute per-supplier aggregates from the silver table, then join `dim_supplier` onto the aggregates (it is SCD1, so it has one row per supplier and no current-row filter is needed).
 - Output columns: `supplier_id, supplier_name, country, rating, shipment_count, delayed_pct, avg_unit_cost_usd, delay_rank`.
 - `delay_rank` is `RANK() OVER (ORDER BY delayed_pct DESC)`.
 - The DONE WHEN count of 24 is for `supplier_version = 1`.
@@ -298,7 +298,7 @@ Core TODOs are 01–15. Stretch TODOs are 16–18.
 - MERGE fails with an error about multiple source rows matching the same target row when the source has two rows with the same `shipment_id`. Dedup (TODO-04) must run before the MERGE.
 - Using `spark.sql(...)` with a temp view is the approach the repo uses. Do not add the `delta-spark` Python package; it is not part of the setup.
 
-**DONE WHEN:** 00 days=2 → 10 → 20: silver 1,300, quarantine 50; SHP000150 status DELIVERED; rerun 20 → no change
+**DONE WHEN:** (with TODO-02 and TODO-04 done) 00 days=2 → 10 → 20: silver 1,300, quarantine 50; SHP000150 status DELIVERED; rerun 20 → no change
 
 **SEE:** dims.py:upsert_dim_supplier
 
@@ -416,7 +416,7 @@ Core TODOs are 01–15. Stretch TODOs are 16–18.
 
 **Concept taught:** Small files and file layout. `OPTIMIZE` compacts many small files; liquid clustering chooses the columns the data is organised by, and it is incremental.
 
-**WHAT:** `ALTER TABLE silver CLUSTER BY (region, event_date)`, `OPTIMIZE`, compare `DESCRIBE DETAIL` numFiles/clusteringColumns
+**WHAT:** `ALTER TABLE workspace.shipments.silver_shipments CLUSTER BY (region, event_date)`, `OPTIMIZE`, compare `DESCRIBE DETAIL` numFiles/clusteringColumns
 
 **WHY:** Every write adds files. Many small files slow down reads. Clustering on the columns you filter by lets Delta skip files that cannot match.
 
