@@ -116,7 +116,7 @@ Design rules:
 | 17 | Stretch: broadcast join + skew/AQE observation | Joins, broadcast, AQE | 3 | 30m |
 | 18 | Stretch: cost awareness — query `system.billing.usage` (availability on Free Edition **unverified**) | Cost monitoring | 2 | 20m |
 
-**Total ≈ 8.5 h** (core 01–15 ≈ 6.5 h, stretch ≈ 2 h), plus doc reading.
+**Total ≈ 8½ h** (core 01–15 ≈ 6¾ h, stretch ≈ 1¾ h), plus doc reading.
 
 ## 6. Team & workflow
 
