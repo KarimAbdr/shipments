@@ -16,6 +16,9 @@ build/
 *.token
 *.log
 .DS_Store
+CLAUDE.md
+PLAN.md
+PUBLISH.md
 
 # All downloaded Databricks extracts are local-only
 data/*.csv

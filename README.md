@@ -1,6 +1,6 @@
 # Shipments Lakehouse: a Databricks learning scaffold
 
-> Learning project — forked & extended. Work in progress: see checklist below.
+> Learning project 
 
 **Problem.** A supplier network ships parts (transformers, inverters, turbine components, cooling modules) across US regions, and every shipment generates status events. Those events arrive as daily batches, contain bad records (missing suppliers, impossible quantities, unknown statuses) and sometimes repeat or update earlier shipments. The question this project works on: how do you turn messy daily batches into analytics you can trust, with every rejected row kept and explained, every re-run safe, and every table change reversible? The data is fully synthetic.
 
