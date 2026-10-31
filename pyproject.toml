@@ -14,3 +14,7 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 include = ["quality_portal*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]

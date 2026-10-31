@@ -1,0 +1,4 @@
+# Local test dependencies. Spark tests run PySpark in local mode, which needs Java 17.
+# Pure-Python tests (tests/test_generator.py) need only pytest.
+pyspark>=3.5,<4.1
+pytest>=8
