@@ -3,8 +3,6 @@
 from datetime import date
 from decimal import Decimal
 
-import pytest
-
 from shipments_pipeline import quality
 
 # Every column that any rule reads. The test DataFrame carries all of them, so the test
@@ -44,17 +42,63 @@ def test_cast_types_invalid_date_becomes_null(spark):
 # HINTS:  pytest fixtures: https://docs.pytest.org/en/stable/how-to/fixtures.html (the `spark` fixture lives in tests/conftest.py). Copy the shape of test_missing_supplier_rule. For the date test, reuse cast_types as the reference test does.
 # DONE WHEN: `pytest -q` shows the 4 tests passed, not skipped
 # SEE:    tests/test_quality.py:test_missing_supplier_rule, docs/TODO.md#todo-03
-def test_invalid_quantity_rule():
-    pytest.skip("TODO-03: see docs/TODO.md#todo-03")
+def _reasons(spark, rows, schema=QUALITY_SCHEMA):
+    """Run the quality flags on `rows` and return {event_id: _dq_reasons}."""
+    df = spark.createDataFrame(rows, schema=schema)
+    return {r["event_id"]: r[quality.REASONS_COL] for r in quality.with_quality_flags(df).collect()}
 
 
-def test_invalid_unit_cost_rule():
-    pytest.skip("TODO-03: see docs/TODO.md#todo-03")
+def test_invalid_quantity_rule(spark):
+    rows = [
+        ("E1", "SHP000001", "SUP001", 0, Decimal("10.00"), date(2026, 10, 1), "DELIVERED"),
+        ("E2", "SHP000002", "SUP001", -3, Decimal("10.00"), date(2026, 10, 1), "DELIVERED"),
+        ("E3", "SHP000003", "SUP001", None, Decimal("10.00"), date(2026, 10, 1), "DELIVERED"),
+        ("E4", "SHP000004", "SUP001", 5, Decimal("10.00"), date(2026, 10, 1), "DELIVERED"),
+    ]
+    assert _reasons(spark, rows) == {
+        "E1": "invalid_quantity",
+        "E2": "invalid_quantity",
+        "E3": "invalid_quantity",
+        "E4": "",
+    }
 
 
-def test_invalid_date_rule():
-    pytest.skip("TODO-03: see docs/TODO.md#todo-03")
+def test_invalid_unit_cost_rule(spark):
+    rows = [
+        ("E1", "SHP000001", "SUP001", 5, Decimal("-5.00"), date(2026, 10, 1), "DELIVERED"),
+        ("E2", "SHP000002", "SUP001", 5, None, date(2026, 10, 1), "DELIVERED"),
+        ("E3", "SHP000003", "SUP001", 5, Decimal("0.00"), date(2026, 10, 1), "DELIVERED"),
+        ("E4", "SHP000004", "SUP001", 5, Decimal("10.00"), date(2026, 10, 1), "DELIVERED"),
+    ]
+    # A cost of 0.00 is allowed (rule is "< 0"), so E3 is valid.
+    assert _reasons(spark, rows) == {
+        "E1": "invalid_unit_cost",
+        "E2": "invalid_unit_cost",
+        "E3": "",
+        "E4": "",
+    }
 
 
-def test_invalid_status_rule():
-    pytest.skip("TODO-03: see docs/TODO.md#todo-03")
+def test_invalid_date_rule(spark):
+    # Start from raw strings, like bronze, so the test covers cast_types + the rule together.
+    raw_schema = (
+        "event_id string, shipment_id string, supplier_id string, quantity string, "
+        "unit_cost_usd string, event_date string, status string"
+    )
+    rows = [
+        ("E1", "SHP000001", "SUP001", "5", "10.00", "not-a-date", "DELIVERED"),
+        ("E2", "SHP000002", "SUP001", "5", "10.00", None, "DELIVERED"),
+        ("E3", "SHP000003", "SUP001", "5", "10.00", "2026-10-01", "DELIVERED"),
+    ]
+    df = quality.cast_types(spark.createDataFrame(rows, schema=raw_schema))
+    reasons = {r["event_id"]: r[quality.REASONS_COL] for r in quality.with_quality_flags(df).collect()}
+    assert reasons == {"E1": "invalid_date", "E2": "invalid_date", "E3": ""}
+
+
+def test_invalid_status_rule(spark):
+    rows = [
+        ("E1", "SHP000001", "SUP001", 5, Decimal("10.00"), date(2026, 10, 1), "UNKNOWN"),
+        ("E2", "SHP000002", "SUP001", 5, Decimal("10.00"), date(2026, 10, 1), None),
+        ("E3", "SHP000003", "SUP001", 5, Decimal("10.00"), date(2026, 10, 1), "DELAYED"),
+    ]
+    assert _reasons(spark, rows) == {"E1": "invalid_status", "E2": "invalid_status", "E3": ""}
