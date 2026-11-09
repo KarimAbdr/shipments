@@ -51,19 +51,31 @@ def rule_missing_supplier() -> Column:
 # DONE WHEN: after rerun of 20_silver (day 1): quarantine 45 rows, 5 distinct reason values; after TODO-03, the 4 rule tests pass (not skipped)
 # SEE:    quality.py:rule_missing_supplier, docs/TODO.md#todo-02
 def rule_invalid_quantity() -> Column:
-    raise NotImplementedError("TODO-02: see docs/TODO.md#todo-02")
+    return F.when(
+        F.col("quantity").isNull() | (F.col("quantity") <= 0),
+        F.lit("invalid_quantity")
+    )
 
 
 def rule_invalid_unit_cost() -> Column:
-    raise NotImplementedError("TODO-02: see docs/TODO.md#todo-02")
+    return F.when(
+        F.col("unit_cost_usd").isNull() | (F.col("unit_cost_usd") < 0),
+        F.lit("invalid_unit_cost")
+    )
 
 
 def rule_invalid_date() -> Column:
-    raise NotImplementedError("TODO-02: see docs/TODO.md#todo-02")
+    return F.when(
+        F.col("event_date").isNull(),
+        F.lit("invalid_date")
+    )
 
 
 def rule_invalid_status() -> Column:
-    raise NotImplementedError("TODO-02: see docs/TODO.md#todo-02")
+    return F.when(
+        F.col("status").isNull() | (~F.col("status").isin(VALID_STATUSES)),
+        F.lit("invalid_status")
+    )
 
 
 ALL_RULES = [
