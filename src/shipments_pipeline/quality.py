@@ -42,14 +42,6 @@ def rule_missing_supplier() -> Column:
     )
 
 
-# TODO-02: Remaining quality rules
-# WHAT:   implement 4 rule functions
-# WHY:    Each rule is one column expression; null handling is where most bugs hide.
-# PRODUCT: Bad quantity, cost, date and status rows get a reason code instead of reaching gold reports.
-# SCOPE:  ~12 lines, ~25 min, difficulty 1/3
-# HINTS:  F.when, Column.isNull, F.trim, Column.isin, F.lit. A comparison with NULL gives NULL, so test for NULL explicitly. The date rule only checks for NULL because cast_types already ran try_cast. Docs: https://docs.databricks.com/aws/en/sql/language-manual/functions/try_cast
-# DONE WHEN: after rerun of 20_silver (day 1): quarantine 45 rows, 5 distinct reason values; after TODO-03, the 4 rule tests pass (not skipped)
-# SEE:    quality.py:rule_missing_supplier, docs/TODO.md#todo-02
 def rule_invalid_quantity() -> Column:
     return F.when(
         F.col("quantity").isNull() | (F.col("quantity") <= 0),
