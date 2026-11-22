@@ -142,7 +142,6 @@ databricks-project/
 │   └── shipments_job.yml           job shipments_pipeline (generate → bronze, more in TODO-14)
 ├── notebooks/
 │   ├── 01_bronze_silver_gold.py    ORIGINAL v0 notebook (untouched)
-│   ├── 01_bronze_silver_gold.ipynb ORIGINAL, notebook import format (untouched)
 │   ├── 00_generate_batches.py      synthetic CSV batches into the UC volume
 │   ├── 10_bronze.py                incremental CSV → bronze (TODO-07)
 │   ├── 20_silver.py                dim load, quality, quarantine, silver (MERGE from TODO-08)
@@ -177,6 +176,7 @@ databricks-project/
 │   ├── ORIGINAL_README.md          the original README, unchanged apart from a one-line attribution header
 │   ├── SCAFFOLD_SPEC.md            the exact build spec the scaffold was written from
 │   ├── ARCHITECTURE.md, VALIDATION.md, SECURITY.md   ORIGINAL
+│   ├── original/01_bronze_silver_gold.ipynb   ORIGINAL notebook, .ipynb copy (moved out of notebooks/: same name as the .py breaks Databricks Git folders)
 │   └── NOTES.md                    your notes for TODO-13, TODO-17, TODO-18 (you create it)
 ├── requirements-dev.txt            pyspark, pytest
 ├── pyproject.toml                  pytest settings

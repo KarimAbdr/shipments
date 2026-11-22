@@ -17,7 +17,6 @@ variables:
 # Files that must not be uploaded to the workspace with the bundle.
 sync:
   exclude:
-    - notebooks/01_bronze_silver_gold.ipynb
     - docs/**
     - data/**
     - quality_portal/**
